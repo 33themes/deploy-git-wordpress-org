@@ -1,6 +1,11 @@
 #! /bin/bash
 
-# deploy-git-wordpress-org.sh
+# deploy-git-wordpress
+
+# By: Gabriel Pérez S
+# https://github.com/33themes/deploy-git-wordpress-org
+# Version: 1.0
+# Based on: https://github.com/aubreypwd/deploy-git-wordpress-org
 
 # By: Aubrey Portwood, Brad Parbs
 # https://github.com/aubreypwd/deploy-git-wordpress-org
@@ -21,9 +26,10 @@
 #
 # DOCBLOCKS DO NOT WORK!
 
+
 # Deps
 if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
-	echo "Usage: sh deploy.wordpress.org.sh [plugin_file_with_header.php] [WordPress.org Username] [Update Readme Only: true|false]";
+	echo "Usage: sh deploy.wordpress.org.sh [plugin_file_with_header.php] [WordPress.org Username] [Update type: readme|assets|version]";
 	echo "I.e.: sh deploy.wordpress.org.sh index.php aubreypwd false";
 	exit 1;
 fi
@@ -46,6 +52,11 @@ SVNIGNORE="deploy-git-wordpress-org
 # Temp place to put the SVN
 SVNPATH="/tmp/$PLUGINSLUG"
 SVNURL="http://plugins.svn.wordpress.org/$PLUGINSLUG"
+
+
+if [ -d "$SVNPATH" ]; then
+    rm -Rf $SVNPATH;
+fi
 
 echo "- Checking to make sure that your plugin and the stable tag in readme.txt are the same..."
 
@@ -73,7 +84,7 @@ LANG2="- Committing your changes to WP.org..."
 if [ "$NEWVERSION1" != "$NEWVERSION2" ]; then echo "- Versions don't match, sorry. Try again. Exiting...."; exit 1; fi
 
 # If readme $3 is true
-if [ "$3" = "true" ]; then
+if [ "$3" = "readme" ]; then
 
 	echo "- You are just updating your readme.txt to the stable tag $SVNPATH/tags/$NEWVERSION2..."
 
@@ -95,11 +106,17 @@ if [ "$3" = "true" ]; then
 	echo "$LANG2"
 	svn commit --username="$2" -m "$COMMITMSG"
 
-else
+fi
+
+# If version $3 is true
+if [ "$3" = "version" ]; then 
 
 	# Export master to SVN
 	git checkout-index -a -f --prefix="$SVNPATH"/trunk/
 	echo "$LANG1"
+
+    # Sync trunk
+    rsync -ahz --progress --exclude=".git" --exclude="*.md" --exclude="assets" --delete "$CURRENTDIR"/ "$SVNPATH"/trunk/
 
 	# Ignore some common files
 	svn propset svn:ignore "$SVNIGNORE" "$SVNPATH/trunk/"
@@ -107,9 +124,13 @@ else
 	# More SVN Work (commit)
 	cd "$SVNPATH"/trunk
 
+    if [ -d "${SVNPATH}/trunk/assets" ]; then 
+        svn rm --force "${SVNPATH}/trunk/assets" 
+    fi 
+
 	# Addremove (YES!)
 	svn status | grep -v "^.[ \t]*\..*" | grep "^?" | awk '{print $2}' | xargs svn add
-	echo LANG1
+    svn status | grep -v "^.[ \t]*\..*" | grep "^[\!D]" | awk '{ print $2}' | xargs svn rm --force
 
 	# Commit the code
 	echo "$LANG2"
@@ -126,6 +147,33 @@ else
 	svn commit --username="$2" -m "Version/Tag: $NEWVERSION1"
 
 fi
+
+# If assets $3 is true
+if [ "$3" = "assets" ]; then 
+
+	# Export master to SVN
+    git checkout-index -a -f --prefix="$SVNPATH"/assets/
+	echo "$LANG1"
+
+    # Copy new assets
+    echo "Copy new assets files"
+    rsync -ahz --progress --exclude=".git" --delete "$CURRENTDIR"/assets/ "$SVNPATH"/assets/
+
+	# More SVN Work (commit)
+    cd "$SVNPATH"/assets
+
+	# Addremove (YES!)
+	svn status | grep -v "^.[ \t]*\..*" | grep "^?" | awk '{print $2}' | xargs svn add
+    svn status | grep -v "^.[ \t]*\..*" | grep "^[\!D]" | awk '{ print $2}' | xargs svn rm --force
+	echo LANG1
+
+	# Commit the tag
+	cd "$SVNPATH"
+
+    echo "- Committing $NEWVERSION1 to WP.org..."
+    svn commit --username="$2" -m "Assets update: $NEWVERSION1"
+
+fi   
 
 # Cleanup!
 echo "- Removing the SVN repo at $SVNPATH"
