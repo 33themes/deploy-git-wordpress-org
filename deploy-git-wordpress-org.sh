@@ -61,7 +61,8 @@ fi
 echo "- Checking to make sure that your plugin and the stable tag in readme.txt are the same..."
 
 # readme.txt Checks
-NEWVERSION1=$(grep "^Stable tag" "$CURRENTDIR"/readme.txt | awk -F' ' '{print $3}' | sed 's/[[:space:]]//g')
+# NEWVERSION1=$(grep "^[\*\#\s]*Stable tag" "$CURRENTDIR"/readme.txt | awk -F' ' '{print $3}' | sed 's/[[:space:]]//g')
+NEWVERSION1=$(cat readme.txt | perl -ne 'if (m/^[\*\s\=]*(Stable tag:?):\s*([0-9\.]+)\s*/i){ print "$2"; }')
 
 	echo "- readme.txt Version: $NEWVERSION1"
 
@@ -176,7 +177,8 @@ if [ "$3" = "assets" ]; then
 fi   
 
 # Cleanup!
+set -x
 echo "- Removing the SVN repo at $SVNPATH"
-rm -rf "${SVNPATH:?}/"*
+rm -Rf "${SVNPATH:?}/"
 
 echo "Deployment finished."
